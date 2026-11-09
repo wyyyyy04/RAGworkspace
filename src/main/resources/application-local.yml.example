@@ -1,0 +1,22 @@
+# ============================================================
+# 本地敏感配置模板
+# 用法：复制本文件为 application-local.yml，填入真实值后使用。
+# application-local.yml 已被 .gitignore 忽略，不会提交到仓库。
+# 也可以通过环境变量覆盖（优先级高于本文件）：
+#   DB_PASSWORD / DRUID_USER / DRUID_PASSWORD
+#   DASHSCOPE_API_KEY
+#   MINIO_ACCESS_KEY / MINIO_SECRET_KEY
+# ============================================================
+spring:
+  datasource:
+    password: your_mysql_password
+    stat-view-servlet:
+      login-username: druid_admin
+      login-password: change_me
+
+dashscope:
+  api-key: your_dashscope_api_key
+
+minio:
+  accessKey: minioadmin
+  secretKey: minioadmin
