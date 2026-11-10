@@ -6,6 +6,7 @@
 #   DB_PASSWORD / DRUID_USER / DRUID_PASSWORD
 #   DASHSCOPE_API_KEY
 #   MINIO_ACCESS_KEY / MINIO_SECRET_KEY
+#   MINERU_API_KEY（MinerU 4.x 服务端启用 --api-key 时使用）
 # ============================================================
 spring:
   datasource:

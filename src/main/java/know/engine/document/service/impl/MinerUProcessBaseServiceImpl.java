@@ -11,16 +11,8 @@ import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import know.engine.document.client.MinerUParseClient;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.hc.client5.http.classic.methods.HttpPost;
-import org.apache.hc.client5.http.config.RequestConfig;
-import org.apache.hc.client5.http.entity.mime.MultipartEntityBuilder;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
-import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
-import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.apache.hc.core5.http.HttpEntity;
-import org.apache.hc.core5.http.io.entity.EntityUtils;
-import org.apache.hc.core5.util.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.Assert;
@@ -58,14 +50,8 @@ public abstract class MinerUProcessBaseServiceImpl implements FileProcessService
     @Autowired
     private PromptService promptService;
 
-    @Value("${file.parse.api.url:http://localhost:8000}")
-    private String fileParseApiUrl;
-
-    @Value("${file.parse.api.connectTimeout:30000}")
-    private int connectTimeout;
-
-    @Value("${file.parse.api.responseTimeout:300000}")
-    private int responseTimeout;
+    @Autowired
+    private MinerUParseClient minerUParseClient;
 
     /**
      * 处理文档转换
@@ -219,8 +205,14 @@ public abstract class MinerUProcessBaseServiceImpl implements FileProcessService
         // 替换 md 中的图片地址为 MinIO 地址，并生成图片描述
         String processedMdContent = processMarkdownImages(mdContent, imageUrlMap);
 
-        // 上传处理后的 md 文件到 MinIO
-        String mdObjectName = baseObjectName + mdFile.getFileName().toString();
+        // 上传处理后的 md 文件到 MinIO。
+        // 4.x default 产物的文件名固定为 markdown.md，直接沿用会覆盖同一文档其他版本的结果，按版本号重命名。
+        String mdFileName = mdFile.getFileName().toString();
+        if ("markdown.md".equalsIgnoreCase(mdFileName)) {
+            Long versionId = document.getCurrentVersionId();
+            mdFileName = (versionId != null ? versionId.toString() : UUID.randomUUID().toString()) + ".md";
+        }
+        String mdObjectName = baseObjectName + mdFileName;
         String mdUrl = fileStorageService.uploadFile(mdObjectName, processedMdContent.getBytes(StandardCharsets.UTF_8), "text/markdown");
         log.info("Markdown 文件已上传到 MinIO: {}", mdUrl);
 
@@ -381,53 +373,22 @@ public abstract class MinerUProcessBaseServiceImpl implements FileProcessService
     }
 
     /**
-     * 调用文件解析接口，获取 ZIP 格式响应
-     * 使用 Apache HttpClient 5，支持流式下载大文件
+     * 调用 MinerU 4.x Tasks API 解析文档，获取 default 产物（ZIP）。
      *
-     * @param fileName   文件名
+     * <p>4.x 不再有同步的 {@code POST /file_parse}，改为：
+     * 创建任务（/v1/tasks）→ 上传源文件（upload.url）→ 轮询任务状态 → 下载 result_url。
+     * 具体协议细节见 {@link MinerUParseClient}。</p>
+     *
+     * @param fileName   用于识别文件类型的 ASCII 安全文件名
      * @param fileStream 文件输入流
      * @return ZIP 文件字节数组
      */
     private byte[] parseDocumentToZip(String fileName, InputStream fileStream) {
-        String url = fileParseApiUrl + "/file_parse";
-
-        // 配置请求超时
-        RequestConfig requestConfig = RequestConfig.custom().setConnectionRequestTimeout(Timeout.ofMilliseconds(connectTimeout)).setResponseTimeout(Timeout.ofMilliseconds(responseTimeout)).build();
-
-        try (CloseableHttpClient httpClient = HttpClients.custom().setDefaultRequestConfig(requestConfig).build()) {
-
-            HttpPost httpPost = new HttpPost(url);
-            httpPost.setHeader("Accept", "application/json");
-
-            // 构建 multipart 请求体，启用 ZIP 格式和返回图片
-            HttpEntity multipartEntity = MultipartEntityBuilder.create()
-                    .setCharset(StandardCharsets.UTF_8)
-                    .addBinaryBody("files", fileStream, org.apache.hc.core5.http.ContentType.APPLICATION_OCTET_STREAM, fileName)
-                    .addTextBody("backend", "pipeline").addTextBody("response_format_zip", "true")
-                    .addTextBody("return_images", "true").addTextBody("return_model_output", "false")
-                    .addTextBody("return_middle_json", "false").build();
-
-            httpPost.setEntity(multipartEntity);
-
-            log.info("开始调用文件解析接口（ZIP 模式）: {}", url);
-
-            try (CloseableHttpResponse response = httpClient.execute(httpPost)) {
-                int statusCode = response.getCode();
-                log.info("文件解析接口响应状态码: {}", statusCode);
-
-                HttpEntity responseEntity = response.getEntity();
-                if (statusCode == 200 && responseEntity != null) {
-                    // 读取响应体为字节数组（ZIP 文件）
-                    byte[] zipBytes = EntityUtils.toByteArray(responseEntity);
-                    log.info("文件解析接口调用成功，ZIP 文件大小: {} bytes", zipBytes.length);
-                    return zipBytes;
-                } else {
-                    String responseBody = responseEntity != null ? EntityUtils.toString(responseEntity, "UTF-8") : "";
-                    log.error("文件解析接口调用失败，状态码: {}, 响应: {}", statusCode, responseBody);
-                    throw new RuntimeException("文件解析接口调用失败: HTTP " + statusCode + ", " + responseBody);
-                }
-            }
-
+        log.info("开始调用 MinerU 4.x 解析接口（Tasks API）: fileName={}", fileName);
+        try {
+            byte[] zipBytes = minerUParseClient.parse(fileName, fileStream);
+            log.info("MinerU 解析接口调用成功，ZIP 文件大小: {} bytes", zipBytes.length);
+            return zipBytes;
         } catch (Exception e) {
             log.error("调用文件解析接口异常", e);
             throw new RuntimeException("调用文件解析接口失败: " + e.getMessage(), e);

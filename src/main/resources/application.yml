@@ -113,8 +113,30 @@ minio:
   bucketName: know-engine # 默认是这个,可以不改
   endpoint: http://127.0.0.1:9090 # 必须指向 --address（S3 API），不是控制台端口
 
-# 文件解析服务配置
+# 文件解析服务配置（MinerU 4.x Tasks API）
 file:
   parse:
     api:
-      url: http://localhost:8000 # 文档解析接口地址，记得改成你自己的
+      url: http://localhost:8000 # 文档解析服务地址，记得改成你自己的
+      # 服务端通过 --api-key 启动时填写；留空表示不鉴权
+      apiKey: ${MINERU_API_KEY:}
+      # 建连超时（毫秒）
+      connectTimeout: 30000
+      # 创建任务、轮询状态的响应超时（毫秒）
+      responseTimeout: 30000
+      # 上传源文件的响应超时（毫秒）
+      uploadTimeout: 600000
+      # 下载解析产物的响应超时（毫秒）
+      downloadTimeout: 300000
+      # 轮询任务状态的间隔（毫秒）
+      pollInterval: 2000
+      # 整个任务等待上限（毫秒），默认 30 分钟
+      parseTimeout: 1800000
+      # PDF/图片档位：flash / basic / standard / advanced；留空由服务端按支持顺序选择
+      tier: standard
+      # auto / txt / ocr
+      ocrMode: auto
+      # 页码范围，如 1-5,8,r3-r1 或 all；留空表示全部
+      pageRange:
+      # 产物格式，逗号分隔：default / docx / html / latex；必须包含 default（下游按 ZIP 中的 markdown.md 处理）
+      outputFormats: default
