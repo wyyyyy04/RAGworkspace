@@ -84,19 +84,19 @@ langchain4j:
     chat-model:
       api-key: ${dashscope.api-key}
       model-name: qwen3.6-flash
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      base-url: https://ws-gjxhzwrdo1ij32zk.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
       log-requests: true
       log-responses: true
     streaming-chat-model:
       api-key: ${dashscope.api-key}
       model-name: qwen3.6-flash
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      base-url: https://ws-gjxhzwrdo1ij32zk.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
       log-requests: true
       log-responses: true
 
 elasticsearch:
   host: http://127.0.0.1:9200
-  base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  base-url: https://ws-gjxhzwrdo1ij32zk.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
   model-name: text-embedding-v4
   api-key: ${dashscope.api-key}
   dimensions: 1536
